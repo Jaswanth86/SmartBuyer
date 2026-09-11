@@ -1,95 +1,67 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 const AMAZON_LINK = 'https://link.amazon/B09Y69EFT';
 const CERAVE_LINK = 'https://www.cerave.com/skincare/cleansers/foaming-facial-cleanser';
 
+const categories = [
+  { id: 'all', label: 'All beauty', note: 'The complete edit', icon: '✦' },
+  { id: 'skincare', label: 'Skincare', note: 'Face, lips & treatments', icon: '◌' },
+  { id: 'haircare', label: 'Haircare', note: 'Oils, wash & styling', icon: '〰' },
+  { id: 'bodycare', label: 'Bodycare', note: 'Bath, soap & moisture', icon: '◇' }
+];
+
+const subcategories = {
+  skincare: ['Facewash', 'Moisturizers', 'Serums', 'Sunscreen', 'Lip care', 'Masks & exfoliators'],
+  haircare: ['Hair oils', 'Shampoo', 'Conditioner', 'Hair masks', 'Scalp care', 'Styling'],
+  bodycare: ['Soaps & body wash', 'Body lotions', 'Scrubs', 'Body oils', 'Hand & foot care', 'Deodorants']
+};
+
+const products = [
+  { id: 'cerave', category: 'skincare', type: 'Facewash', title: 'CeraVe Foaming Facial Cleanser', description: 'A foaming daily cleanser positioned for normal to oily skin, with ceramides, niacinamide and hyaluronic acid.', meta: 'Normal to oily skin', badge: "Editor's reference", score: '8.7', featured: true, imageClass: 'cerave-art', link: AMAZON_LINK, source: CERAVE_LINK },
+  { id: 'gentle-cleanser', category: 'skincare', type: 'Facewash', title: 'Gentle Cleansing Edit', description: 'A guide to low-fuss cleansers, textures, and the details worth checking before you buy.', meta: 'Daily cleansing', badge: 'Coming soon', score: '—', imageClass: 'pearl-art' },
+  { id: 'hydration', category: 'skincare', type: 'Moisturizers', title: 'The Hydration Shelf', description: 'Explore lightweight gels, creams, and barrier-minded moisturizers for different routines.', meta: 'Moisture & comfort', badge: 'Guide', score: '—', imageClass: 'aqua-art' },
+  { id: 'hair-oil', category: 'haircare', type: 'Hair oils', title: 'Hair Oil Rituals', description: 'A practical starting point for understanding hair oils, scalp routines, and application habits.', meta: 'Oils & scalp care', badge: 'Guide', score: '—', imageClass: 'amber-art' },
+  { id: 'shampoo', category: 'haircare', type: 'Shampoo', title: 'The Shampoo Edit', description: 'Learn how cleansing strength, scalp needs, and hair texture shape a shampoo choice.', meta: 'Wash day', badge: 'Coming soon', score: '—', imageClass: 'violet-art' },
+  { id: 'bodywash', category: 'bodycare', type: 'Soaps & body wash', title: 'Body Cleansing 101', description: 'From classic soaps to modern body washes: understand textures, fragrance, and skin comfort.', meta: 'Bath & body', badge: 'Guide', score: '—', imageClass: 'rose-art' },
+  { id: 'body-lotion', category: 'bodycare', type: 'Body lotions', title: 'The Body Moisture Edit', description: 'A visual guide to lotions, creams, and body oils for everyday softness.', meta: 'Moisture & glow', badge: 'Coming soon', score: '—', imageClass: 'sand-art' }
+];
+
 function TiltCard({ children, className = '' }) {
-  const ref = useRef(null);
-  const [style, setStyle] = useState({});
-  const onMove = (e) => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - 0.5;
-    const y = (e.clientY - r.top) / r.height - 0.5;
-    setStyle({ transform: `perspective(900px) rotateX(${y * -7}deg) rotateY(${x * 9}deg) translateY(-6px)` });
-  };
-  return <div ref={ref} className={`tilt-card ${className}`} style={style} onMouseMove={onMove} onMouseLeave={() => setStyle({})}>{children}</div>;
+  const [transform, setTransform] = useState('');
+  return <div className={`tilt-card ${className}`} style={{ transform }} onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width - .5; const y = (e.clientY - r.top) / r.height - .5; setTransform(`perspective(1100px) rotateX(${y * -5}deg) rotateY(${x * 7}deg) translateY(-5px)`); }} onMouseLeave={() => setTransform('')}>{children}</div>;
 }
 
-function Bottle({ large = false }) {
-  return <div className={`bottle-scene ${large ? 'large' : ''}`}>
-    <div className="aura" />
-    <div className="orbit orbit-one" />
-    <div className="orbit orbit-two" />
-    <div className="bubbles"><i/><i/><i/><i/><i/></div>
-    <div className="bottle-shadow" />
-    <div className="bottle">
-      <div className="pump"><span /></div>
-      <div className="cap" />
-      <div className="label">
-        <strong>CeraVe<span>®</span></strong>
-        <small>DEVELOPED WITH DERMATOLOGISTS</small>
-        <b>Foaming<br/>Facial<br/>Cleanser</b>
-        <em>For Normal to Oily Skin</em>
-        <p>Cleanses & removes oil<br/>without disrupting the<br/>protective skin barrier</p>
-        <div className="label-line" />
-        <small>WITH 3 ESSENTIAL CERAMIDES,<br/>NIACINAMIDE & HYALURONIC ACID</small>
-      </div>
-    </div>
-    <div className="floating-tag tag-top">DERMATOLOGIST<br/><b>DEVELOPED</b></div>
-    <div className="floating-tag tag-bottom">SKIN BARRIER<br/><b>FOCUS</b></div>
-  </div>
+function ProductVisual({ product, large = false }) {
+  return <div className={`product-visual ${product.imageClass} ${large ? 'large' : ''}`}><div className="visual-glow"/><div className="visual-orbit orbit-a"/><div className="visual-orbit orbit-b"/>{product.id === 'cerave' ? <div className="cleanser-bottle"><div className="bottle-pump"><i/></div><div className="bottle-cap"/><div className="bottle-label"><strong>CeraVe</strong><small>DEVELOPED WITH DERMATOLOGISTS</small><b>Foaming<br/>Facial<br/>Cleanser</b><em>For Normal to Oily Skin</em><p>Cleanses & removes oil<br/>without disrupting the<br/>protective skin barrier</p><span>3 ESSENTIAL CERAMIDES</span></div></div> : <div className="abstract-object"><span>{product.type.split(' ')[0].toUpperCase()}</span></div>}<div className="visual-particles"><i/><i/><i/><i/></div></div>;
+}
+
+function ProductCard({ product, onOpen }) {
+  return <TiltCard className="product-card"><button className="product-card-click" onClick={() => onOpen(product)}><div className="card-visual"><ProductVisual product={product}/><span className="card-badge">{product.badge}</span></div><div className="card-copy"><div className="card-meta"><span>{product.category}</span><span>{product.type}</span></div><h3>{product.title}</h3><p>{product.description}</p><div className="card-bottom"><span>{product.meta}</span><b>{product.score !== '—' ? `${product.score} / 10` : 'Explore'} <span>↗</span></b></div></div></button></TiltCard>;
 }
 
 function App() {
   const [menu, setMenu] = useState(false);
-  const [activeIngredient, setActiveIngredient] = useState('Ceramides');
-  useEffect(() => { document.title = 'Smart Buyer Guide — Better choices, beautifully explained.'; }, []);
-  const ingredients = {
-    Ceramides: 'Help support the skin’s natural protective barrier and help retain moisture.',
-    'Hyaluronic Acid': 'A hydrating ingredient that helps attract and retain moisture in the skin.',
-    Niacinamide: 'A form of vitamin B3 commonly used to help support a calm-looking skin barrier.'
-  };
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeSub, setActiveSub] = useState('All');
+  const [selected, setSelected] = useState(null);
+  useEffect(() => { document.title = 'GLOWÉ — The considered beauty edit'; }, []);
+  const visibleProducts = useMemo(() => products.filter(p => activeCategory === 'all' || p.category === activeCategory).filter(p => activeSub === 'All' || p.type === activeSub), [activeCategory, activeSub]);
+  const chooseCategory = (id) => { setActiveCategory(id); setActiveSub('All'); document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   return <div className="app">
-    <div className="grain" />
-    <nav className="nav container">
-      <a className="brand" href="#top"><span className="brand-mark">✦</span><span>SMART<br/><b>BUYER GUIDE</b></span></a>
-      <div className={`nav-links ${menu ? 'open' : ''}`}>
-        <a href="#discover">Discover</a><a href="#reviews">Reviews</a><a href="#ingredients">Ingredients</a><a href="#guides">Guides</a>
-      </div>
-      <div className="nav-actions"><a className="search" href="#discover">⌕ <span>Search</span></a><a className="nav-cta" href="#featured">Explore <span>↗</span></a><button className="menu-btn" onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button></div>
-    </nav>
-
+    <div className="grain"/>
+    <nav className="nav container"><a className="brand" href="#top"><span className="brand-symbol">G</span><span className="brand-word">GLOWÉ<small>THE CONSIDERED BEAUTY EDIT</small></span></a><div className={`nav-links ${menu ? 'open' : ''}`}><a href="#catalog">Shop by care</a><a href="#featured">Featured</a><a href="#journal">Journal</a><a href="#about">About GLOWÉ</a></div><div className="nav-actions"><a className="nav-search" href="#catalog">⌕ <span>Search</span></a><a className="nav-cta" href="#catalog">Explore <span>↗</span></a><button className="menu-btn" onClick={() => setMenu(!menu)}>{menu ? '×' : '☰'}</button></div></nav>
     <main id="top">
-      <section className="hero container">
-        <div className="hero-copy">
-          <div className="eyebrow"><span className="pulse" /> PRODUCT INTELLIGENCE / 001</div>
-          <h1>Better choices.<br/><span>Beautifully</span><br/>explained.</h1>
-          <p className="hero-text">A smarter way to discover products worth your attention. Independent-feeling guides, useful details, and no unnecessary noise.</p>
-          <div className="hero-actions"><a className="button primary" href="#featured">Explore the guide <span>↗</span></a><a className="text-link" href="#reviews">See our latest review <span>↓</span></a></div>
-          <div className="hero-meta"><div><b>01</b><span>Research-led<br/>discoveries</span></div><div><b>∞</b><span>Designed for<br/>curious buyers</span></div></div>
-        </div>
-        <div className="hero-visual"><div className="visual-label label-left">01 / FEATURED<br/><b>FORMULA STUDY</b></div><Bottle large/><div className="score-card"><span>SMART SCORE</span><strong>8.7<span>/10</span></strong><small>Thoughtful daily cleansing</small><div className="score-bar"><i /></div></div><div className="scroll-cue">SCROLL TO DISCOVER <span>↓</span></div></div>
-      </section>
-
-      <section className="ticker"><div className="ticker-track"><span>CURATED DISCOVERIES</span><i>✦</i><span>HONEST DETAILS</span><i>✦</i><span>SMARTER BUYING</span><i>✦</i><span>CURATED DISCOVERIES</span><i>✦</i><span>HONEST DETAILS</span></div></section>
-
-      <section className="section container" id="featured">
-        <div className="section-head"><div><div className="eyebrow">01 / FEATURED DISCOVERY</div><h2>A closer look at<br/><span>what matters.</span></h2></div><p>We turn product pages into clear, useful experiences—so you can spend less time searching and more time choosing well.</p></div>
-        <TiltCard className="feature-card"><div className="feature-image"><div className="mini-grid"/><Bottle/></div><div className="feature-content"><div className="product-kicker">SKINCARE / DAILY CLEANSER</div><h3>CeraVe Foaming<br/>Facial Cleanser</h3><p>A gentle, foaming cleanser designed for normal to oily skin. A formula study focused on cleansing, oil removal, and maintaining the skin barrier.</p><div className="feature-tags"><span>Normal → oily skin</span><span>Foaming texture</span><span>Barrier-minded</span></div><div className="feature-bottom"><div className="review-stars">★★★★★ <small>Editor's research pick</small></div><a className="button primary" href={AMAZON_LINK} target="_blank" rel="noreferrer">Check Amazon <span>↗</span></a></div><a className="source-link" href={CERAVE_LINK} target="_blank" rel="noreferrer">Read the brand’s product details ↗</a></div></TiltCard>
-      </section>
-
-      <section className="dark-section" id="ingredients"><div className="container ingredient-layout"><div className="ingredient-copy"><div className="eyebrow mint">02 / FORMULA UNPACKED</div><h2>Small ingredients.<br/><span>Big context.</span></h2><p>Good buying decisions start with understanding what a product is designed to do. Explore the key ingredients highlighted for this cleanser.</p><div className="ingredient-tabs">{Object.keys(ingredients).map(name => <button key={name} className={activeIngredient === name ? 'active' : ''} onClick={() => setActiveIngredient(name)}>{name}<span>↗</span></button>)}</div><div className="ingredient-detail"><div className="detail-number">0{Object.keys(ingredients).indexOf(activeIngredient) + 1}</div><div><h4>{activeIngredient}</h4><p>{ingredients[activeIngredient]}</p></div></div></div><div className="molecule-stage"><div className="molecule-ring ring-a"/><div className="molecule-ring ring-b"/><div className="molecule-core"><span>FORMULA<br/><b>LAB</b></span></div><div className="molecule-node node-a">CERA</div><div className="molecule-node node-b">HA</div><div className="molecule-node node-c">B3</div><div className="stage-caption">ACTIVE SYSTEM / 03<br/><b>ESSENTIAL COMPONENTS</b></div></div></div></section>
-
-      <section className="section container" id="reviews"><div className="section-head compact"><div><div className="eyebrow">03 / THE SMART VERDICT</div><h2>Useful clarity,<br/><span>not hype.</span></h2></div><p>Our review format separates what the product says, who it may suit, and what to consider before buying.</p></div><div className="verdict-grid"><TiltCard className="verdict-main"><div className="verdict-top"><span>EDITORIAL TAKE</span><span className="verified">● RESEARCHED</span></div><h3>A practical cleanser<br/>for a considered routine.</h3><p>Its positioning is straightforward: cleanse away excess oil while keeping the skin’s protective barrier in mind. Always consider your own skin needs and sensitivities.</p><div className="verdict-score"><strong>8.7</strong><div><span>SMART SCORE</span><small>Based on formula positioning, usability, and everyday relevance.</small></div></div></TiltCard><div className="verdict-list"><div><span>BEST FOR</span><b>Normal to oily skin</b><small>A foaming format for shoppers looking for a daily cleanser.</small></div><div><span>LOOK FOR</span><b>Ceramides + hydration</b><small>Ingredients highlighted by the brand for barrier support.</small></div><div><span>REMEMBER</span><b>Your skin is personal</b><small>Patch test and stop use if irritation occurs.</small></div></div></div></section>
-
-      <section className="guide-section" id="guides"><div className="container"><div className="section-head light"><div><div className="eyebrow mint">04 / THE GUIDE INDEX</div><h2>Go deeper.<br/><span>Buy smarter.</span></h2></div><a className="button outline" href="#top">View all guides <span>↗</span></a></div><div className="guide-grid"><a className="guide-card" href="#ingredients"><span>01</span><h3>How to choose<br/>a cleanser</h3><small>FOUNDATION / 06 MIN READ ↗</small></a><a className="guide-card featured-guide" href="#featured"><span>02</span><h3>Ingredient<br/>decoder</h3><small>SKINCARE / 04 MIN READ ↗</small></a><a className="guide-card" href="#reviews"><span>03</span><h3>How we score<br/>a product</h3><small>METHOD / 03 MIN READ ↗</small></a></div></div></section>
+      <section className="hero container"><div className="hero-copy"><div className="eyebrow"><span className="pulse"/> GLOWÉ / BEAUTY INTELLIGENCE</div><h1>Beauty,<br/><span>beautifully</span><br/>considered.</h1><p>Discover skincare, haircare, and bodycare through a calmer, smarter lens. Curated products, useful context, and rituals worth understanding.</p><div className="hero-actions"><a className="button primary" href="#catalog">Explore the edit <span>↗</span></a><a className="text-link" href="#featured">Meet the first feature <span>↓</span></a></div><div className="hero-stat-row"><div><b>03</b><span>Care worlds</span></div><div><b>∞</b><span>Rituals to explore</span></div><div><b>01</b><span>Thoughtful standard</span></div></div></div><div className="hero-visual"><div className="hero-label">THE GLOWÉ<br/><b>BEAUTY UNIVERSE</b></div><div className="hero-sphere"><div className="sphere-ring ring-one"/><div className="sphere-ring ring-two"/><div className="sphere-core"><span>CARE<br/><b>EDIT</b></span></div><div className="orbit-word word-one">SKIN</div><div className="orbit-word word-two">HAIR</div><div className="orbit-word word-three">BODY</div></div><div className="hero-note"><span>01 / 03</span><b>START WITH<br/>WHAT YOU NEED</b></div></div></section>
+      <section className="ticker"><div className="ticker-track"><span>SKINCARE</span><i>✦</i><span>HAIRCARE</span><i>✦</i><span>BODYCARE</span><i>✦</i><span>RITUALS WITH INTENTION</span><i>✦</i><span>SKINCARE</span><i>✦</i><span>HAIRCARE</span></div></section>
+      <section className="care-section container" id="catalog"><div className="section-head"><div><div className="eyebrow">01 / SHOP BY CARE</div><h2>Find your<br/><span>care world.</span></h2></div><p>Start with the part of your routine you want to understand better. Every world opens into focused categories, guides, and product discoveries.</p></div><div className="care-grid">{categories.slice(1).map(c => <button key={c.id} className={`care-card care-${c.id} ${activeCategory === c.id ? 'selected' : ''}`} onClick={() => chooseCategory(c.id)}><span className="care-icon">{c.icon}</span><div><small>GLOWÉ / 0{categories.indexOf(c)}</small><h3>{c.label}</h3><p>{c.note}</p></div><span className="care-arrow">↗</span></button>)}</div><div className="catalog-toolbar"><div className="category-pills">{categories.map(c => <button key={c.id} className={activeCategory === c.id ? 'active' : ''} onClick={() => chooseCategory(c.id)}>{c.label}</button>)}</div>{activeCategory !== 'all' && <div className="sub-pills">{['All', ...subcategories[activeCategory]].map(s => <button key={s} className={activeSub === s ? 'active' : ''} onClick={() => setActiveSub(s)}>{s}</button>)}</div>}</div><div className="catalog-heading"><div><span className="eyebrow">02 / THE PRODUCT EDIT</span><h2>{activeCategory === 'all' ? 'A considered shelf.' : `${categories.find(c => c.id === activeCategory)?.label} essentials.`}</h2></div><span className="result-count">{visibleProducts.length.toString().padStart(2, '0')} discoveries</span></div><div className="product-grid">{visibleProducts.map(p => <ProductCard key={p.id} product={p} onOpen={setSelected}/>)}</div></section>
+      <section className="feature-section" id="featured"><div className="container feature-layout"><div className="feature-copy"><div className="eyebrow mint">03 / FEATURED REFERENCE</div><h2>One product.<br/><span>More context.</span></h2><p>Our first reference is a cleanser from CeraVe. Explore the product positioning, the ingredient language, and the questions worth asking before adding it to your routine.</p><a className="button primary" href={AMAZON_LINK} target="_blank" rel="noreferrer">Check Amazon <span>↗</span></a><a className="source-link" href={CERAVE_LINK} target="_blank" rel="noreferrer">Read official product details ↗</a></div><TiltCard className="feature-product"><ProductVisual product={products[0]} large/><div className="feature-product-info"><span>SKINCARE / FACEWASH</span><h3>CeraVe Foaming<br/>Facial Cleanser</h3><p>For normal to oily skin · Foaming texture</p><div><b>8.7</b><small>GLOWÉ RESEARCH SCORE</small></div></div></TiltCard></div></section>
+      <section className="ritual-section container" id="journal"><div className="section-head"><div><div className="eyebrow">04 / THE GLOWÉ JOURNAL</div><h2>Rituals, decoded<br/><span>with care.</span></h2></div><p>Beauty is personal. Our journal is designed to make the language around products easier to navigate.</p></div><div className="journal-grid"><article><div className="journal-number">01</div><div><span>SKINCARE / FOUNDATION</span><h3>How to build a facewash routine</h3><p>Texture, frequency, and the details that make a cleanser fit your day.</p><a href="#catalog">Read guide ↗</a></div></article><article><div className="journal-number">02</div><div><span>HAIRCARE / RITUAL</span><h3>Hair oils, explained simply</h3><p>Where oils fit, what to consider, and how to start with intention.</p><a href="#catalog">Read guide ↗</a></div></article><article><div className="journal-number">03</div><div><span>BODYCARE / EVERYDAY</span><h3>Soap, body wash, or both?</h3><p>A calm guide to choosing your everyday cleansing format.</p><a href="#catalog">Read guide ↗</a></div></article></div></section>
+      <section className="about-section" id="about"><div className="container about-layout"><div><div className="eyebrow mint">05 / ABOUT GLOWÉ</div><h2>A softer way<br/>to <span>choose.</span></h2></div><p>GLOWÉ is a personal beauty discovery brand for people who want less noise and more understanding. We bring skincare, haircare, and bodycare into one considered space—where visuals inspire, details inform, and every routine stays your own.</p></div></section>
     </main>
-
-    <footer className="footer"><div className="container footer-top"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>SMART<br/><b>BUYER GUIDE</b></span></a><div className="footer-note">Thoughtful discoveries for<br/>the modern buyer.</div><div className="footer-links"><a href="#featured">Discover</a><a href="#reviews">Reviews</a><a href="#guides">Guides</a><a href={CERAVE_LINK} target="_blank" rel="noreferrer">Sources ↗</a></div></div><div className="container footer-bottom"><span>© 2026 SMART BUYER GUIDE</span><span>Built for better decisions.</span><span>Affiliate links may earn a commission.</span></div></footer>
+    <footer className="footer"><div className="container footer-top"><a className="brand" href="#top"><span className="brand-symbol">G</span><span className="brand-word">GLOWÉ<small>THE CONSIDERED BEAUTY EDIT</small></span></a><div className="footer-note">Thoughtful beauty discoveries<br/>for everyday rituals.</div><div className="footer-links"><a href="#catalog">Shop by care</a><a href="#featured">Featured</a><a href="#journal">Journal</a><a href={CERAVE_LINK} target="_blank" rel="noreferrer">Sources ↗</a></div></div><div className="container footer-bottom"><span>© 2026 GLOWÉ</span><span>Beauty, beautifully considered.</span><span>Affiliate links may earn a commission.</span></div></footer>
+    {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="product-modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setSelected(null)}>×</button><ProductVisual product={selected} large/><div className="modal-content"><span className="eyebrow">{selected.category} / {selected.type}</span><h2>{selected.title}</h2><p>{selected.description}</p><div className="modal-facts"><span>{selected.meta}</span><span>{selected.score !== '—' ? `Score ${selected.score}/10` : 'Editorial guide'}</span></div>{selected.link ? <><a className="button primary" href={selected.link} target="_blank" rel="noreferrer">Check Amazon <span>↗</span></a><a className="source-link" href={selected.source} target="_blank" rel="noreferrer">View official source ↗</a></> : <button className="button outline" onClick={() => setSelected(null)}>Keep exploring <span>↗</span></button>}</div></div></div>}
   </div>;
 }
 
