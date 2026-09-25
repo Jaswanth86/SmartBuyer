@@ -17,7 +17,7 @@ Telegram setup:
 4. Keep the bot token only in the hosting provider secret/environment settings.
 
 Market engine:
-V5 listens to Binance aggTrade and bookTicker streams for a configurable set of USDT spot markets. It builds rolling 1m, 3m, 5m, 15m and 1h comparisons and measures price velocity, volume acceleration, trade acceleration, aggressive buy/sell notional, order-book imbalance, liquidity changes and multi-timeframe agreement.
+V5 listens to Binance aggTrade, bookTicker, depth@100ms and all supported spot kline intervals: 1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w and 1M. It uses batched WebSocket connections so the per-connection stream limit is respected. The engine measures price velocity, volume acceleration, trade acceleration, aggressive buy/sell notional, order-book signals, liquidity changes and multi-timeframe agreement.
 
 This is an anomaly scanner, not a guarantee that a coin will pump or dump.
 
