@@ -15,7 +15,9 @@ if(!TELEGRAM_TOKEN) console.warn('[V5] TELEGRAM_BOT_TOKEN is not set. Telegram a
 const state=new Map();
 const alerts=new Map();
 const subscriptions=new Set();
-let ws=null;
+const sockets=[];
+const INTERVALS=['1s','1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d','3d','1w','1M'];
+const STREAMS_PER_CONNECTION=1000;
 let reconnectTimer=null;
 let lastMarketLoad=0;
 let connectedAt=null;
@@ -141,34 +143,57 @@ function shouldAlert(symbol,a){
   return true;
 }
 
+function closeSockets(){while(sockets.length){const x=sockets.pop();try{x.close()}catch{}}}
 function connect(symbols){
-  if(ws) try{ws.close()}catch{}
-  const streams=[];
-  for(const s of symbols) streams.push(s+'@aggTrade',s+'@bookTicker');
-  ws=new WebSocket(BINANCE_WS+'?streams='+streams.join('/'));
-  ws.on('open',()=>{connectedAt=new Date().toISOString();console.log('[V5] WebSocket connected:',streams.length,'streams')});
-  ws.on('message',raw=>{
-    messageCount++;lastEventAt=new Date().toISOString();
-    try{
-      const parsed=JSON.parse(raw.toString());
-      const m=parsed.data||parsed;
-      const e=m.e,s=m.s?.toLowerCase();
-      if(!s)return;
-      if(e==='aggTrade'){
-        const price=n(m.p),qty=n(m.q);
-        ingestTrade(s,price,qty,m.m);
-        const st=state.get(s);
-        if(st.ticks.length%25===0){
-          const a=analyze(st);
-          if(shouldAlert(s,a)) sendAlert({symbol:s.toUpperCase(),price:price.toLocaleString(undefined,{maximumFractionDigits:10}),priceMove:pct(price,st.ticks[0]?.p||price),bookImbalance:st.bookImbalance,liquidityChange:st.liquidityChange,...a});
+  closeSockets();
+  const streamsPerSymbol=2+INTERVALS.length;
+  const symbolsPerSocket=Math.max(1,Math.floor(STREAMS_PER_CONNECTION/streamsPerSymbol));
+  for(let i=0;i<symbols.length;i+=symbolsPerSocket){
+    const batch=symbols.slice(i,i+symbolsPerSocket);
+    const streams=[];
+    for(const s of batch){
+      streams.push(s+'@aggTrade',s+'@bookTicker',s+'@depth@100ms');
+      for(const tf of INTERVALS) streams.push(s+'@kline_'+tf);
+    }
+    const socket=new WebSocket(BINANCE_WS+'?streams='+streams.join('/'));
+    sockets.push(socket);
+    socket.on('open',()=>{connectedAt=new Date().toISOString();console.log('[V5] WebSocket connected:',batch.length,'symbols',streams.length,'streams')});
+    socket.on('message',raw=>{
+      messageCount++;lastEventAt=new Date().toISOString();
+      try{
+        const parsed=JSON.parse(raw.toString());
+        const m=parsed.data||parsed;
+        const e=m.e,s=m.s?.toLowerCase();
+        if(!s)return;
+        if(e==='aggTrade'){
+          const price=n(m.p),qty=n(m.q);
+          ingestTrade(s,price,qty,m.m);
+          const st=state.get(s);
+          if(st.ticks.length%25===0){
+            const a=analyze(st);
+            if(shouldAlert(s,a)) sendAlert({symbol:s.toUpperCase(),price:price.toLocaleString(undefined,{maximumFractionDigits:10}),priceMove:pct(price,st.ticks[0]?.p||price),bookImbalance:st.bookImbalance,liquidityChange:st.liquidityChange,...a});
+          }
+        }else if(e==='bookTicker'){
+          ingestBook(s,n(m.B),n(m.A),n(m.b),n(m.a));
+        }else if(e==='depthUpdate'){
+          const bidQty=m.b?.reduce((a,x)=>a+n(x[1]),0)||0;
+          const askQty=m.a?.reduce((a,x)=>a+n(x[1]),0)||0;
+          const st=state.get(s)||{symbol:s,ticks:[],bookImbalance:0,liquidityChange:0,lastPrice:0,prevDepth:0};
+          st.depthEvents=(st.depthEvents||0)+1;
+          st.depthBidUpdates=bidQty;st.depthAskUpdates=askQty;state.set(s,st);
+        }else if(e==='kline'){
+          const k=m.k;
+          const st=state.get(s)||{symbol:s,ticks:[],bookImbalance:0,liquidityChange:0,lastPrice:n(k?.c)};
+          st.klines=st.klines||{};
+          const tf=k.i;
+          st.klines[tf]={time:k.t,open:n(k.o),high:n(k.h),low:n(k.l),close:n(k.c),volume:n(k.v),quoteVolume:n(k.q),trades:n(k.n),takerBuyQuote:n(k.Q),closed:k.x};
+          st.lastPrice=n(k.c);state.set(s,st);
         }
-      }else if(e==='bookTicker'){
-        ingestBook(s,n(m.B),n(m.A),n(m.b),n(m.a));
-      }
-    }catch{}
-  });
-  ws.on('close',()=>{console.warn('[V5] WebSocket closed; reconnecting');scheduleReconnect(symbols)});
-  ws.on('error',e=>console.error('[V5] WebSocket error',e.message));
+      }catch{}
+    });
+    socket.on('close',()=>{console.warn('[V5] WebSocket batch closed; reconnecting');scheduleReconnect(symbols)});
+    socket.on('error',e=>console.error('[V5] WebSocket error',e.message));
+  }
 }
 
 function scheduleReconnect(symbols){
@@ -203,7 +228,7 @@ refresh();
 http.createServer((req,res)=>{
   res.setHeader('content-type','application/json');
   res.setHeader('access-control-allow-origin','*');
-  if(req.url==='/health')return res.end(JSON.stringify({ok:true,service:'Crypto Radar AI V5 scanner',connected:!!ws,connectedAt,lastEventAt,markets:subscriptions.size,messages:messageCount,alerts:alerts.size,lastMarketLoad}));
+  if(req.url==='/health')return res.end(JSON.stringify({ok:true,service:'Crypto Radar AI V5 scanner',connected:sockets.length>0,connectedAt,lastEventAt,markets:subscriptions.size,messages:messageCount,alerts:alerts.size,lastMarketLoad}));
   if(req.url==='/alerts')return res.end(JSON.stringify([...alerts.entries()].map(([key,time])=>({key,time}))));
   res.statusCode=404;res.end(JSON.stringify({error:'not found'}));
 }).listen(PORT,()=>console.log('[V5] Health server on '+PORT));
