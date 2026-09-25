@@ -29,7 +29,9 @@ export default async function handler() {
       if (!response.ok) continue;
 
       const xml = await response.text();
-      const items = xml.match(/<item[\\s\\S]*?<\\/item>/gi) || [];
+
+      // Regex literal: single backslashes only.
+      const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
 
       for (const item of items.slice(0, 12)) {
         const title = readTag(item, "title");
