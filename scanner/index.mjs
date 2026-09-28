@@ -166,28 +166,28 @@ function formatDuration(ms){
 }
 function botHelp(){
   return [
-    '🤖 <b>CRYPTO RADAR AI V6 — COMMANDS</b>',
+    '<b>CRYPTO RADAR AI V6</b>',
+    '<b>COMMANDS</b>',
     '',
-    '<b>Monitoring</b>',
+    '<b>MONITORING</b>',
     '/radar on — enable normal market radar',
     '/radar off — disable normal radar alerts',
     '/news on — enable news → reaction alerts',
     '/news off — disable news alerts',
     '',
-    '<b>Settings</b>',
-    '/score 72 — radar alert score (50–95)',
-    '/reaction 65 — news reaction score (0–100)',
-    '/cooldown 15m — alert cooldown (1m–24h)',
-    '/maxprice 2 — monitor coins up to this price',
-    '/newcoins 30 — newer-coin window in days',
+    '<b>SETTINGS</b>',
+    '/score 72 — radar alert score',
+    '/reaction 65 — news reaction score',
+    '/cooldown 15m — alert cooldown',
+    '/maxprice 2 — maximum coin price',
+    '/newcoins 30 — newer-coin window',
     '',
-    '<b>Tools</b>',
+    '<b>TOOLS</b>',
     '/status — live scanner status',
-    '/settings — current bot settings',
-    '/refresh — refresh Binance market list',
-    '/test — send a Telegram test alert',
-    '/help — show this menu'
-  ].join('\\n');
+    '/settings — show current settings',
+    '/refresh — refresh Binance markets',
+    '/test — send Telegram test alert'
+  ].join('\n');
 }
 async function sendBotMessage(chat,text){
   return telegram('sendMessage',{chat_id:chat,text,parse_mode:'HTML',disable_web_page_preview:true});
@@ -225,16 +225,14 @@ async function handleTelegramCommand(chat,raw){
   if(command==='/help'||command==='/commands'){await sendBotMessage(chat,botHelp());return;}
   if(command==='/settings'){
     await sendBotMessage(chat,[
-      '⚙️ <b>V6 BOT SETTINGS</b>','',
+      '<b>V6 BOT SETTINGS</b>',
       'Radar: <b>'+(botSettings.radar?'ON':'OFF')+'</b>',
       'News → reaction: <b>'+(botSettings.news?'ON':'OFF')+'</b>',
       'Radar score: <b>'+botSettings.radarScore+'/100</b>',
       'News reaction score: <b>'+botSettings.reactionScore+'/100</b>',
       'Cooldown: <b>'+formatDuration(botSettings.cooldownMs)+'</b>',
       'Max coin price: <b>$'+botSettings.maxPrice+'</b>',
-      'Newer-coin window: <b>'+botSettings.newCoinDays+' days</b>',
-      '',
-      'Use /help for commands.'
+      'Newer-coin window: <b>'+botSettings.newCoinDays+' days</b>'
     ].join('\n'));return;
   }
   if(command==='/radar'){
@@ -406,25 +404,31 @@ async function sendRadarAlert(symbol,meta,signal){
   const chat=TELEGRAM_CHAT_ID||discoveredChatId||await discoverChat();
   if(!chat)return false;
   radarAlertSeen.set(key,now());
+
   const direction=signal.side==='BUY PRESSURE';
   const icon=direction?'🟢':'🔴';
+  const priceMove=(signal.priceMove>=0?'+':'')+signal.priceMove.toFixed(2)+'%';
   const text=[
-    icon+' <b>CRYPTO RADAR AI — MARKET ALERT</b>',
+    '<b>CRYPTO RADAR AI</b>',
+    '<b>MARKET ALERT</b>',
     '',
-    '<b>'+escapeHtml(meta.symbol)+'</b>  $'+n(meta.price).toPrecision(8),
-    '<b>'+escapeHtml(signal.side)+'</b> · Radar score <b>'+signal.score+'/100</b>',
+    '🪙 <b>'+escapeHtml(meta.symbol)+'</b>  $'+n(meta.price).toPrecision(8),
+    icon+' <b>'+escapeHtml(signal.side)+'</b>  ·  Score <b>'+signal.score+'/100</b>',
     '',
-    'Price change: '+(signal.priceMove>=0?'+':'')+signal.priceMove.toFixed(2)+'%',
-    'Volume acceleration: '+signal.volumeRatio.toFixed(2)+'×',
-    'Trade acceleration: '+signal.tradeRatio.toFixed(2)+'×',
-    'Taker-buy share: '+signal.buyRatio.toFixed(1)+'%',
-    'Order-book imbalance: '+n(getState(symbol).bookImbalance).toFixed(1)+'%',
-    'Liquidity change: '+n(getState(symbol).liquidityChange).toFixed(2)+'%',
-    meta.newCoin?'🆕 Newly listed/newer coin window: YES':'',
+    '<b>MARKET ACTIVITY</b>',
+    'Price change: <b>'+priceMove+'</b>',
+    'Volume acceleration: <b>'+signal.volumeRatio.toFixed(2)+'×</b>',
+    'Trade acceleration: <b>'+signal.tradeRatio.toFixed(2)+'×</b>',
+    'Taker-buy share: <b>'+signal.buyRatio.toFixed(1)+'%</b>',
+    'Order-book imbalance: <b>'+n(getState(symbol).bookImbalance).toFixed(1)+'%</b>',
+    'Liquidity change: <b>'+n(getState(symbol).liquidityChange).toFixed(2)+'%</b>',
+    meta.newCoin?'🆕 <b>Newer coin window: YES</b>':'',
     '',
     direction?'⚡ Buying pressure and market activity increased together.':'⚠ Selling pressure and market activity increased together.',
-    'This is an anomaly/activity alert, not a guaranteed prediction or financial advice.'
-  ].filter(Boolean).join('\\n');
+    '',
+    '<i>Activity/anomaly alert — not a guaranteed prediction or financial advice.</i>'
+  ].filter(Boolean).join('\n');
+
   try{
     await telegram('sendMessage',{chat_id:chat,text,parse_mode:'HTML'});
     console.log('[V6 RADAR ALERT]',symbol,signal.side,signal.score);
@@ -434,7 +438,6 @@ async function sendRadarAlert(symbol,meta,signal){
     return false;
   }
 }
-
 async function sendNewsReactionAlert(symbol,meta,news,reaction){
   const key=symbol+':'+normalizeTitle(news.title);
   const last=alertSeen.get(key)||0;
