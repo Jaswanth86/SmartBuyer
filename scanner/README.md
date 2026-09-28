@@ -1,68 +1,72 @@
-# Crypto Radar AI V5 Scanner
+# Crypto Radar AI V6 — News-First Market Reaction Scanner
 
-This worker is designed to run continuously outside Netlify. It consumes Binance WebSocket market data and sends anomaly alerts to Telegram.
+V6 changes the alert order to:
 
-Environment variables:
-- TELEGRAM_BOT_TOKEN: secret bot token; never commit it.
-- TELEGRAM_CHAT_ID: optional destination chat id.
-- PORT: default 8787.
-- MAX_SYMBOLS: default 250.
-- MIN_ALERT_SCORE: default 78.
-- ALERT_COOLDOWN_MS: default 300000.
+**NEWS DETECTED → NEWS INVESTIGATED → MARKET MOVEMENT OBSERVED → REACTION CONFIRMED → TELEGRAM ALERT**
 
-Telegram setup:
-1. Open your bot and send /start.
-2. Run the worker with TELEGRAM_BOT_TOKEN configured as a secret.
-3. If TELEGRAM_CHAT_ID is supplied, V5 sends there. Otherwise V5 attempts to discover the latest chat id from Telegram updates.
-4. Keep the bot token only in the hosting provider secret/environment settings.
+The scanner does not alert merely because a headline exists. It first searches related coverage, classifies the event, estimates corroboration, then waits for post-publication market evidence.
 
-Market engine:
-V5 listens to Binance aggTrade, bookTicker, depth@100ms and all supported spot kline intervals: 1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w and 1M. It uses batched WebSocket connections so the per-connection stream limit is respected. The engine measures price velocity, volume acceleration, trade acceleration, aggressive buy/sell notional, order-book signals, liquidity changes and multi-timeframe agreement.
+## V6 flow
 
-This is an anomaly scanner, not a guarantee that a coin will pump or dump.
+1. **News discovery**
+   - Polls recent crypto news through Google News RSS.
+   - Prioritizes Binance USDT spot coins at or below `MAX_PRICE` (default $2).
+   - Newly listed coins are prioritized when Binance provides listing/onboard metadata.
 
-Run:
-npm install
-TELEGRAM_BOT_TOKEN=your-secret npm start
+2. **News investigation**
+   - Searches the headline again for related coverage.
+   - Counts independent source domains.
+   - Classifies the event: security, listing/launch, partnership, network, regulation, capital, tokenomics or market/project.
+   - Stores the investigation while waiting for enough post-news candles.
 
-Health endpoint:
-GET /health
+3. **Market reaction**
+   - Uses 1-minute Binance candles after the article timestamp.
+   - Compares price, quote volume and trade count with the pre-news baseline.
+   - Measures taker-buy share and current order-book imbalance.
+   - Waits up to 25 minutes for evidence rather than firing immediately.
 
-For 24/7 operation, deploy this folder as a persistent Node service or container. Netlify Functions are not intended to hold a WebSocket open continuously.
+4. **Alert decision**
+   - Reaction score must reach `MIN_REACTION_SCORE` (default 72).
+   - The alert identifies the news, sources, confidence, price reaction, volume acceleration, trade acceleration and buy/sell pressure.
+   - The message explicitly says that time alignment does not prove causation.
 
-## Product alert logic
+## Market data
 
-V5 is designed around an early-move alert rather than a simple price-change alert.
+V6 listens to Binance `aggTrade`, `bookTicker`, `depth@100ms` and 1m/5m/15m/1h/4h kline streams. Binance documents combined WebSocket streams and a 1024-stream-per-connection limit; V6 batches subscriptions accordingly.
 
-Priority universe:
-- USDT spot coins priced at or below `MAX_PRICE` (default $2).
-- New-listing metadata is tracked when Binance provides an onboard/listing timestamp.
-- New listings can be highlighted separately from older low-priced coins.
+## Environment
 
-An alert should be generated only when the market evidence is strong enough:
-- abnormal volume/notional acceleration
-- abnormal trade-count acceleration
-- aggressive buy/sell imbalance
-- price velocity
-- order-book imbalance/liquidity change
-- agreement across multiple timeframes
-- cooldown to avoid repeated alerts
+- `TELEGRAM_BOT_TOKEN` — secret; never commit it.
+- `TELEGRAM_CHAT_ID` — optional fixed destination. Otherwise the worker discovers the latest chat after the user starts the bot.
+- `MAX_SYMBOLS` — default 500.
+- `MAX_PRICE` — default 2.
+- `NEW_COIN_DAYS` — default 30.
+- `MIN_REACTION_SCORE` — default 72.
+- `NEWS_POLL_MS` — default 30000.
+- `ALERT_COOLDOWN_MS` — default 900000.
+- `NEWS_LOOKBACK_HOURS` — default 2.
+- `MAX_NEWS_CANDIDATES` — default 40.
 
-News enrichment:
-- For a triggered candidate, V5 queries Google News RSS for the coin/base asset and adds recent matching headlines to the Telegram message.
-- This is news enrichment, not proof that the news caused the move.
-- Social/influencer monitoring should be added through an authenticated X API integration or another licensed social-data provider. Do not scrape or impersonate private feeds.
+## Health endpoints
 
-## Selling as a subscription
+- `GET /health`
+- `GET /news-status`
 
-The recommended commercial architecture is one scanner + one alert engine + many subscriber destinations.
+## Important product rule
 
-Each subscriber should have:
-- Telegram chat id
-- subscription status
-- plan
-- expiry timestamp
-- alert preferences (price ceiling, new-listing window, minimum score, cooldown)
-- optional watched coins
+This is a market-reaction intelligence system, not a guaranteed pump/dump predictor. News can be coincidental, delayed, already priced in, false, or misinterpreted. Alerts should be marketed as anomaly/reaction intelligence rather than guaranteed trade calls.
 
-The scanner remains shared; the delivery layer decides which subscribers receive each alert. Payment processing should be connected to a real subscription provider before accepting customers.
+## Social/influencer signals
+
+Add authenticated/licensed social data as a separate evidence source. Do not rely on fragile scraping or invent influencer activity. When added, social evidence should enrich the same news → investigation → market-reaction pipeline.
+
+## 24/7 hosting
+
+Run the scanner as a persistent Node service/container. Do not use a short-lived Netlify Function as the WebSocket worker.
+
+Run locally:
+
+`npm install`
+`TELEGRAM_BOT_TOKEN=your-secret npm start`
+
+Before commercial launch, add subscriber routing, subscription expiry, payment-provider webhooks, per-user alert filters and authenticated social/news providers.
