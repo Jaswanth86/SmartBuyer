@@ -198,10 +198,19 @@ async function investigateNews(article,baseAsset){
   return {...article,event,related:related.slice(0,6),corroborated,sourceCount:domains.size,confidence,ageMinutes};
 }
 
-function marketReaction(s,newsTime){
-  const bars=(s.klines['1m']||[]).filter(x=>x.closed);
+async function marketReaction(symbol,s,newsTime){
+  let bars=(s.klines['1m']||[]).filter(x=>x.closed);
+  const needHistorical=bars.filter(x=>x.time<newsTime).length<5;
+  if(needHistorical){
+    try{
+      const start=Math.max(0,newsTime-10*60000);
+      const end=Math.min(now(),newsTime+20*60000);
+      const rows=await fetchJson(BINANCE_API+'/klines?symbol='+encodeURIComponent(symbol.toUpperCase())+'&interval=1m&startTime='+start+'&endTime='+end+'&limit=40');
+      bars=rows.map(x=>({time:n(x[0]),open:n(x[1]),high:n(x[2]),low:n(x[3]),close:n(x[4]),volume:n(x[5]),quoteVolume:n(x[7]),trades:n(x[8]),takerBuyQuote:n(x[10]),closed:true}));
+    }catch(e){console.error('[V6 reaction history]',symbol,e.message)}
+  }
   const before=bars.filter(x=>x.time<newsTime).slice(-5);
-  const after=bars.filter(x=>x.time>=newsTime&&x.time<=newsTime+20*60000);
+  const after=bars.filter(x=>x.time>=newsTime&&x.time<=Math.min(now(),newsTime+20*60000));
   if(before.length<3||after.length<2)return {ready:false};
   const base=before[0].close;
   const last=after[after.length-1].close;
@@ -291,7 +300,7 @@ async function processNews(){
   }
   for(const [key,item] of pendingNews){
     if(now()>item.expiresAt){pendingNews.delete(key);continue}
-    const reaction=marketReaction(getState(item.symbol),item.article.pubDate);
+    const reaction=await marketReaction(item.meta.symbol,getState(item.symbol),item.article.pubDate);
     if(reaction.ready&&item.article.confidence>=55){
       const sent=await sendNewsReactionAlert(item.symbol,item.meta,item.article,reaction);
       if(sent||reaction.score>=MIN_REACTION_SCORE)pendingNews.delete(key);
@@ -372,10 +381,21 @@ http.createServer((req,res)=>{
   res.setHeader('content-type','application/json');
   res.setHeader('access-control-allow-origin','*');
   if(req.url==='/health')return res.end(JSON.stringify({
-    ok:true,service:'Crypto Radar AI V6 scanner',connected:sockets.length>0,connectedAt,lastEventAt,
+    ok:true,service:'Crypto Radar AI V6 scanner',connected:sockets.some(s=>s.readyState===1),connectedAt,lastEventAt,
     markets:symbolMeta.size,messages:messageCount,maxPrice:MAX_PRICE,newCoinDays:NEW_COIN_DAYS,
-    newsInvestigations,newsReactionAlerts,lastMarketLoad
+    newsInvestigations,newsReactionAlerts,lastMarketLoad,telegramConfigured:!!TELEGRAM_TOKEN,
+    telegramChatConfigured:!!TELEGRAM_CHAT_ID
   }));
+  if(req.url==='/test-telegram'){
+    discoverChat().then(async chat=>{
+      if(!chat)return res.end(JSON.stringify({ok:false,error:'No Telegram chat found. Open the bot in Telegram and send /start first.'}));
+      try{
+        await telegram('sendMessage',{chat_id:chat,text:'✅ <b>Crypto Radar AI V6 Telegram test</b>\nNews → investigation → market-reaction pipeline is connected.',parse_mode:'HTML'});
+        res.end(JSON.stringify({ok:true,chatIdFound:true}));
+      }catch(e){res.end(JSON.stringify({ok:false,error:e.message}))}
+    });
+    return;
+  }
   if(req.url==='/news-status')return res.end(JSON.stringify({
     seen:newsSeen.size,pending:pendingNews.size,investigations:newsInvestigations,reactionAlerts:newsReactionAlerts,lastNewsPoll,
     flow:['NEWS_DETECTED','NEWS_INVESTIGATED','MARKET_REACTION_MEASURED','ALERT_IF_REACTION_CONFIRMED']
