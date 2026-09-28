@@ -376,6 +376,17 @@ async function refreshMarkets(){
 setInterval(refreshMarkets,30*60*1000);
 setInterval(processNews,NEWS_POLL_MS);
 refreshMarkets();
+setTimeout(async()=>{
+  const chat=TELEGRAM_CHAT_ID||await discoverChat();
+  if(chat){
+    try{
+      await telegram('sendMessage',{chat_id:chat,text:'🟢 <b>Crypto Radar AI V6 ONLINE</b>\\nNews → investigation → market reaction monitoring is active.',parse_mode:'HTML'});
+      console.log('[V6] Telegram online test sent');
+    }catch(e){console.error('[V6 Telegram startup test]',e.message)}
+  }else{
+    console.log('[V6] Telegram chat not found. Send /start to the bot or configure TELEGRAM_CHAT_ID.');
+  }
+},5000);
 
 http.createServer((req,res)=>{
   res.setHeader('content-type','application/json');
