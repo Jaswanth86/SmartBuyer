@@ -299,9 +299,6 @@ async function processNews(){
       console.log('[V6 REACTION WAIT]',item.symbol,'waiting for post-news market evidence');
     }
   }
-      }
-    }catch(e){console.error('[V6 news]',symbol,e.message)}
-  }
   for(const [k,t] of newsSeen)if(now()-t>24*3600000)newsSeen.delete(k);
   for(const [k,v] of pendingNews)if(now()>v.expiresAt)pendingNews.delete(k);
 }
