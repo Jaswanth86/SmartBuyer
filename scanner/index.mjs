@@ -18,6 +18,7 @@ const MAX_NEWS_CANDIDATES=Number(process.env.MAX_NEWS_CANDIDATES||40);
 const state=new Map();
 const symbolMeta=new Map();
 const newsSeen=new Map();
+const pendingNews=new Map();
 const alertSeen=new Map();
 const sockets=[];
 let reconnectTimer=null;
@@ -283,16 +284,26 @@ async function processNews(){
         if(newsSeen.has(key))continue;
         newsSeen.set(key,now());
         const investigated=await investigateNews(article,meta.baseAsset);
-        const reaction=marketReaction(getState(symbol),article.pubDate);
-        if(reaction.ready&&investigated.confidence>=55){
-          await sendNewsReactionAlert(symbol,meta,investigated,reaction);
-        }else{
-          console.log('[V6 NEWS WAIT]',symbol,investigated.event,investigated.confidence,reaction.ready?'market not strong enough':'waiting for post-news candles');
-        }
+        pendingNews.set(key,{symbol,meta,article:investigated,expiresAt:now()+25*60000});
+        console.log('[V6 NEWS DETECTED]',symbol,investigated.event,investigated.confidence,investigated.title);
+      }
+    }catch(e){console.error('[V6 news]',symbol,e.message)}
+  }
+  for(const [key,item] of pendingNews){
+    if(now()>item.expiresAt){pendingNews.delete(key);continue}
+    const reaction=marketReaction(getState(item.symbol),item.article.pubDate);
+    if(reaction.ready&&item.article.confidence>=55){
+      const sent=await sendNewsReactionAlert(item.symbol,item.meta,item.article,reaction);
+      if(sent||reaction.score>=MIN_REACTION_SCORE)pendingNews.delete(key);
+    }else{
+      console.log('[V6 REACTION WAIT]',item.symbol,'waiting for post-news market evidence');
+    }
+  }
       }
     }catch(e){console.error('[V6 news]',symbol,e.message)}
   }
   for(const [k,t] of newsSeen)if(now()-t>24*3600000)newsSeen.delete(k);
+  for(const [k,v] of pendingNews)if(now()>v.expiresAt)pendingNews.delete(k);
 }
 
 function analyzeLive(s){
@@ -369,7 +380,7 @@ http.createServer((req,res)=>{
     newsInvestigations,newsReactionAlerts,lastMarketLoad
   }));
   if(req.url==='/news-status')return res.end(JSON.stringify({
-    seen:newsSeen.size,investigations:newsInvestigations,reactionAlerts:newsReactionAlerts,lastNewsPoll,
+    seen:newsSeen.size,pending:pendingNews.size,investigations:newsInvestigations,reactionAlerts:newsReactionAlerts,lastNewsPoll,
     flow:['NEWS_DETECTED','NEWS_INVESTIGATED','MARKET_REACTION_MEASURED','ALERT_IF_REACTION_CONFIRMED']
   }));
   res.statusCode=404;res.end(JSON.stringify({error:'not found'}));
